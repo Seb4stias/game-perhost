@@ -226,7 +226,7 @@
         } else if (type < 0.8) {
           // Small building (jump over)
           buildings.push({ x: 820, h: 20 + Math.random() * 15, w: 20 + Math.random() * 15, lit: Math.random() > 0.3 });
-        } else {
+        } else if (score > 600) {
           // Virus (fly)
           viruses.push({ x: 820, y: ground - 20 - Math.random() * 40, w: 24, h: 20 });
         }
