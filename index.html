@@ -109,7 +109,7 @@
     let isDucking = false;
 
     // Robot
-    let robot = { x: 80, y: ground, w: 30, h: 50, duckH: 30 };
+    let robot = { x: 80, y: ground, w: 24, h: 36, duckH: 22 };
     let legFrame = 0;
 
     // Obstacles
@@ -128,7 +128,7 @@
       
       // Red chest plate
       ctx.fillStyle = '#e53935';
-      ctx.fillRect(r.x + 5, y + 8, r.w - 10, h - 16);
+      ctx.fillRect(r.x + 4, y + 6, r.w - 8, h - 12);
       
       // Letter P
       ctx.fillStyle = '#fff';
@@ -138,8 +138,8 @@
       
       // Head (antenna)
       ctx.fillStyle = '#e53935';
-      ctx.fillRect(r.x + 12, y - 8, 6, 8);
-      ctx.fillRect(r.x + 10, y - 12, 10, 4);
+      ctx.fillRect(r.x + 9, y - 6, 5, 6);
+      ctx.fillRect(r.x + 8, y - 9, 8, 3);
       
       // Eyes
       ctx.fillStyle = '#0f0';
@@ -151,8 +151,8 @@
         ctx.fillStyle = '#333';
         legFrame = (legFrame + 0.15) % 4;
         const legOff = Math.sin(legFrame * Math.PI) * 4;
-        ctx.fillRect(r.x + 5, y + h, 6, 8 + legOff);
-        ctx.fillRect(r.x + r.w - 11, y + h, 6, 8 - legOff);
+        ctx.fillRect(r.x + 4, y + h, 5, 7 + legOff);
+        ctx.fillRect(r.x + r.w - 9, y + h, 5, 7 - legOff);
       }
     }
 
