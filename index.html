@@ -271,9 +271,17 @@
     }
 
     function spawnObstacle() {
-      const lastObs = buildings.length > 0 ? buildings[buildings.length - 1] : null;
-      const minGap = 150 + (10 - speed) * 10;
-      if (lastObs && (820 - lastObs.x) < minGap) return;
+      // Calculate minimum gap based on speed (faster = tighter)
+      const minGap = 180 + (10 - speed) * 15;
+      
+      // Check distance from ALL obstacles (buildings + viruses)
+      const lastBuilding = buildings.length > 0 ? buildings[buildings.length - 1] : null;
+      const lastVirus = viruses.length > 0 ? viruses[viruses.length - 1] : null;
+      const lastX = Math.max(
+        lastBuilding ? lastBuilding.x + lastBuilding.w : 0,
+        lastVirus ? lastVirus.x + 24 : 0
+      );
+      if (lastX > 820 - minGap) return;
 
       if (Math.random() < (0.015 + speed * 0.001)) {
         const type = Math.random();
