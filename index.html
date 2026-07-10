@@ -215,7 +215,7 @@
       const bx = b.x * scaleX;
       const by = (ground + 50 - b.h) * scaleY;
       const bw = b.w * s;
-      const bh = b.h * s;
+      const bh = b.h * s + 2; // +2 to sit flush on ground line
 
       ctx.fillStyle = '#2a2a2a';
       ctx.fillRect(bx, by, bw, bh);
