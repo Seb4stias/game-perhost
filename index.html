@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>PerRobot — El juego de PerHost</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -11,24 +11,27 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      min-height: 100vh;
       font-family: 'Courier New', monospace;
       overflow: hidden;
+      touch-action: none;
     }
-    canvas { border: 2px solid #333; border-radius: 4px; }
+    canvas { border: 2px solid #333; border-radius: 4px; max-width: 100vw; max-height: 100vh; }
     #ui {
       position: absolute;
-      top: 20px;
+      top: 10px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 30px;
+      gap: 15px;
       align-items: center;
       z-index: 10;
+      flex-wrap: wrap;
+      justify-content: center;
     }
     #score, #highscore {
       color: #e53935;
-      font-size: 24px;
+      font-size: clamp(14px, 4vw, 24px);
       font-weight: bold;
       text-shadow: 0 0 10px rgba(229,57,53,0.5);
       letter-spacing: 2px;
@@ -44,13 +47,13 @@
     }
     #gameOver h1 {
       color: #e53935;
-      font-size: 48px;
+      font-size: clamp(28px, 8vw, 48px);
       margin-bottom: 10px;
       text-shadow: 0 0 20px rgba(229,57,53,0.8);
     }
     #gameOver p {
       color: #888;
-      font-size: 18px;
+      font-size: clamp(14px, 3vw, 18px);
       margin-bottom: 20px;
     }
     #gameOver button {
@@ -58,7 +61,7 @@
       color: white;
       border: none;
       padding: 12px 30px;
-      font-size: 18px;
+      font-size: clamp(14px, 3vw, 18px);
       font-family: 'Courier New', monospace;
       cursor: pointer;
       border-radius: 4px;
@@ -67,12 +70,39 @@
     #gameOver button:hover { background: #c62828; }
     #instructions {
       position: absolute;
-      bottom: 20px;
+      bottom: 10px;
       left: 50%;
       transform: translateX(-50%);
       color: #555;
-      font-size: 14px;
+      font-size: clamp(10px, 2.5vw, 14px);
       text-align: center;
+      width: 90%;
+    }
+    #touchZones {
+      display: none;
+      position: absolute;
+      bottom: 40px;
+      left: 0;
+      right: 0;
+      height: 80px;
+      z-index: 5;
+    }
+    .touch-zone {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    #touchLeft { left: 0; width: 50%; }
+    #touchRight { left: 50%; width: 50%; }
+    @media (max-width: 600px) {
+      #touchZones { display: flex; }
+      #instructions { bottom: 130px; }
     }
   </style>
 </head>
@@ -81,13 +111,17 @@
     <span id="score">SCORE 00000</span>
     <span id="highscore">HI 00000</span>
   </div>
-  <canvas id="game" width="800" height="300"></canvas>
+  <canvas id="game"></canvas>
   <div id="gameOver">
     <h1>GAME OVER</h1>
     <p id="finalScore">Score: 0</p>
     <button onclick="restart()">REINICIAR</button>
   </div>
-  <div id="instructions">ESPACIO o CLICK para saltar | ↓ para agacharse</div>
+  <div id="touchZones">
+    <div id="touchLeft" class="touch-zone">⬆ SALTAR</div>
+    <div id="touchRight" class="touch-zone">⬇ AGACHARSE</div>
+  </div>
+  <div id="instructions">ESPACIO/CLICK = saltar | ↓ = agacharse</div>
 
   <script>
     const canvas = document.getElementById('game');
@@ -97,143 +131,152 @@
     const gameOverEl = document.getElementById('gameOver');
     const finalScoreEl = document.getElementById('finalScore');
 
+    let W, H, ground, scaleX, scaleY;
     let score = 0;
     let highScore = parseInt(localStorage.getItem('perrobot_hi') || '0');
     let speed = 4;
-    let baseSpeed = 4;
     let frame = 0;
     let gameOver = false;
-    let ground = 260;
     let jumpForce = 0;
     let gravity = 0.6;
     let isJumping = false;
     let isDucking = false;
-
-    // Robot
-    let robot = { x: 80, y: ground, w: 24, h: 36, duckH: 22 };
     let legFrame = 0;
 
-    // Obstacles
+    let robot = { x: 80, y: 0, w: 24, h: 36, duckH: 22 };
     let obstacles = [];
     let buildings = [];
     let viruses = [];
+
+    function resize() {
+      const maxW = Math.min(window.innerWidth - 10, 800);
+      const maxH = Math.min(window.innerHeight * 0.55, 300);
+      W = maxW;
+      H = maxH;
+      canvas.width = W;
+      canvas.height = H;
+      ground = H - 40;
+      robot.y = ground;
+      scaleX = W / 800;
+      scaleY = H / 300;
+    }
+
+    resize();
+    window.addEventListener('resize', resize);
 
     function drawRobot() {
       const r = robot;
       const h = isDucking ? r.duckH : r.h;
       const y = isDucking ? ground + (r.h - r.duckH) : r.y;
-      
-      // Body (black)
+      const s = Math.min(scaleX, scaleY);
+      const sw = r.w * s;
+      const sh = h * s;
+      const sx = r.x * scaleX;
+      const sy = y * scaleY;
+      const sw2 = 24 * s;
+      const sh2 = 36 * s;
+
       ctx.fillStyle = '#1a1a1a';
-      ctx.fillRect(r.x, y, r.w, h);
-      
-      // Red chest plate
+      ctx.fillRect(sx, sy, sw, sh);
+
       ctx.fillStyle = '#e53935';
-      ctx.fillRect(r.x + 4, y + 6, r.w - 8, h - 12);
-      
-      // Letter P
+      ctx.fillRect(sx + 4*s, sy + 6*s, sw - 8*s, sh - 12*s);
+
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px Courier New';
+      ctx.font = `bold ${Math.max(8, 11*s)}px Courier New`;
       ctx.textAlign = 'center';
-      ctx.fillText('P', r.x + r.w/2, y + h/2 + 5);
-      
-      // Head (antenna)
+      ctx.fillText('P', sx + sw/2, sy + sh/2 + 4*s);
+
       ctx.fillStyle = '#e53935';
-      ctx.fillRect(r.x + 9, y - 6, 5, 6);
-      ctx.fillRect(r.x + 8, y - 9, 8, 3);
-      
-      // Eyes
+      ctx.fillRect(sx + 9*s, sy - 6*s, 5*s, 6*s);
+      ctx.fillRect(sx + 8*s, sy - 9*s, 8*s, 3*s);
+
       ctx.fillStyle = '#0f0';
-      ctx.fillRect(r.x + 6, y + 3, 5, 4);
-      ctx.fillRect(r.x + r.w - 11, y + 3, 5, 4);
-      
-      // Legs (animated)
+      ctx.fillRect(sx + 6*s, sy + 3*s, 4*s, 3*s);
+      ctx.fillRect(sx + sw - 10*s, sy + 3*s, 4*s, 3*s);
+
       if (!isDucking) {
         ctx.fillStyle = '#333';
         legFrame = (legFrame + 0.15) % 4;
-        const legOff = Math.sin(legFrame * Math.PI) * 4;
-        ctx.fillRect(r.x + 4, y + h, 5, 7 + legOff);
-        ctx.fillRect(r.x + r.w - 9, y + h, 5, 7 - legOff);
+        const legOff = Math.sin(legFrame * Math.PI) * 3 * s;
+        ctx.fillRect(sx + 4*s, sy + sh, 4*s, 6*s + legOff);
+        ctx.fillRect(sx + sw - 8*s, sy + sh, 4*s, 6*s - legOff);
       }
     }
 
     function drawBuilding(b) {
-      // Building body
+      const s = Math.min(scaleX, scaleY);
+      const bx = b.x * scaleX;
+      const by = (ground + 50 - b.h) * scaleY;
+      const bw = b.w * s;
+      const bh = b.h * s;
+
       ctx.fillStyle = '#2a2a2a';
-      ctx.fillRect(b.x, ground + 50 - b.h, b.w, b.h);
-      
-      // Windows
+      ctx.fillRect(bx, by, bw, bh);
+
       ctx.fillStyle = b.lit ? '#ffd54f' : '#333';
-      for (let wy = ground + 50 - b.h + 5; wy < ground + 45; wy += 12) {
-        for (let wx = b.x + 4; wx < b.x + b.w - 4; wx += 10) {
-          ctx.fillRect(wx, wy, 5, 7);
+      for (let wy = by + 4*s; wy < by + bh - 4*s; wy += 10*s) {
+        for (let wx = bx + 3*s; wx < bx + bw - 3*s; wx += 8*s) {
+          ctx.fillRect(wx, wy, 4*s, 5*s);
         }
       }
-      
-      // Roof antenna
+
       ctx.fillStyle = '#555';
-      ctx.fillRect(b.x + b.w/2 - 1, ground + 50 - b.h - 10, 2, 10);
+      ctx.fillRect(bx + bw/2 - 1, by - 8*s, 2, 8*s);
       ctx.fillStyle = '#e53935';
-      ctx.fillRect(b.x + b.w/2 - 2, ground + 50 - b.h - 12, 4, 3);
+      ctx.fillRect(bx + bw/2 - 2, by - 10*s, 4, 3*s);
     }
 
     function drawVirus(v) {
-      const cx = v.x + 12;
-      const cy = v.y;
-      
-      // Body
+      const s = Math.min(scaleX, scaleY);
+      const cx = (v.x + 12) * scaleX;
+      const cy = v.y * scaleY;
+      const r = 10 * s;
+
       ctx.fillStyle = '#7b1fa2';
       ctx.beginPath();
-      ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
-      
-      // Spikes
+
       ctx.strokeStyle = '#7b1fa2';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * s;
       for (let i = 0; i < 8; i++) {
         const angle = (i / 8) * Math.PI * 2 + frame * 0.05;
         ctx.beginPath();
-        ctx.moveTo(cx + Math.cos(angle) * 10, cy + Math.sin(angle) * 10);
-        ctx.lineTo(cx + Math.cos(angle) * 16, cy + Math.sin(angle) * 16);
+        ctx.moveTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+        ctx.lineTo(cx + Math.cos(angle) * (r + 6*s), cy + Math.sin(angle) * (r + 6*s));
         ctx.stroke();
       }
-      
-      // Eyes
+
       ctx.fillStyle = '#fff';
-      ctx.fillRect(cx - 4, cy - 3, 3, 3);
-      ctx.fillRect(cx + 2, cy - 3, 3, 3);
-      
-      // Evil smile
+      ctx.fillRect(cx - 3*s, cy - 2*s, 2*s, 2*s);
+      ctx.fillRect(cx + 1*s, cy - 2*s, 2*s, 2*s);
+
       ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = s;
       ctx.beginPath();
-      ctx.arc(cx, cy + 2, 4, 0, Math.PI);
+      ctx.arc(cx, cy + 2*s, 3*s, 0, Math.PI);
       ctx.stroke();
-      
-      // Wings (flapping)
-      const wingY = Math.sin(frame * 0.2) * 4;
+
       ctx.fillStyle = '#9c27b0';
-      ctx.fillRect(cx - 18, cy - 4 + wingY, 8, 3);
-      ctx.fillRect(cx + 10, cy - 4 - wingY, 8, 3);
+      const wingY = Math.sin(frame * 0.2) * 3 * s;
+      ctx.fillRect(cx - 15*s, cy - 3*s + wingY, 6*s, 2*s);
+      ctx.fillRect(cx + 8*s, cy - 3*s - wingY, 6*s, 2*s);
     }
 
     function spawnObstacle() {
-      // Check minimum distance from last obstacle
       const lastObs = buildings.length > 0 ? buildings[buildings.length - 1] : null;
-      const minGap = 150 + (10 - speed) * 10; // Gap gets tighter as speed increases
+      const minGap = 150 + (10 - speed) * 10;
       if (lastObs && (820 - lastObs.x) < minGap) return;
-      
+
       if (Math.random() < (0.015 + speed * 0.001)) {
         const type = Math.random();
         if (type < 0.4) {
-          // Building
           const h = 30 + Math.random() * 40;
           buildings.push({ x: 820, h, w: 25 + Math.random() * 20, lit: Math.random() > 0.3 });
         } else if (type < 0.75) {
-          // Small building (jump over)
           buildings.push({ x: 820, h: 20 + Math.random() * 15, w: 20 + Math.random() * 15, lit: Math.random() > 0.3 });
         } else if (score > 600) {
-          // Virus (fly) - more frequent at higher scores
           const virusChance = score > 3000 ? 0.15 : score > 1500 ? 0.1 : 0.08;
           if (Math.random() < virusChance) {
             viruses.push({ x: 820, y: ground - 15 - Math.random() * 35, w: 24, h: 20 });
@@ -246,22 +289,21 @@
       const r = robot;
       const h = isDucking ? r.duckH : r.h;
       const y = isDucking ? ground + (r.h - r.duckH) : r.y;
-      
-      // Building collision
+      const margin = 3;
+
       for (const b of buildings) {
-        if (r.x + r.w > b.x && r.x < b.x + b.w &&
+        if (r.x + r.w - margin > b.x && r.x + margin < b.x + b.w &&
             y + h > ground + 50 - b.h && y < ground + 50) {
           return true;
         }
       }
-      
-      // Virus collision
+
       for (const v of viruses) {
         const dx = (r.x + r.w/2) - (v.x + 12);
         const dy = (y + h/2) - v.y;
         if (Math.sqrt(dx*dx + dy*dy) < 18) return true;
       }
-      
+
       return false;
     }
 
@@ -269,34 +311,31 @@
       ctx.strokeStyle = '#333';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(0, ground + 50);
-      ctx.lineTo(800, ground + 50);
+      ctx.moveTo(0, (ground + 50) * scaleY);
+      ctx.lineTo(W, (ground + 50) * scaleY);
       ctx.stroke();
-      
-      // Ground details
+
       ctx.fillStyle = '#222';
-      for (let i = 0; i < 800; i += 30) {
-        const offset = (frame * speed) % 30;
-        ctx.fillRect(i - offset, ground + 52, 20, 2);
+      const offset = (frame * speed * scaleX) % (30 * scaleX);
+      for (let i = -30 * scaleX; i < W + 30 * scaleX; i += 30 * scaleX) {
+        ctx.fillRect(i - offset, (ground + 52) * scaleY, 20 * scaleX, 2);
       }
     }
 
     function drawStars() {
       ctx.fillStyle = '#333';
-      for (let i = 0; i < 50; i++) {
-        const x = (i * 137 + frame * 0.1) % 800;
-        const y = (i * 97) % 150;
+      for (let i = 0; i < 30; i++) {
+        const x = (i * 137 + frame * 0.1) % W;
+        const y = (i * 97) % (H * 0.5);
         ctx.fillRect(x, y, 1, 1);
       }
     }
 
     function update() {
       if (gameOver) return;
-      
       frame++;
       score += Math.floor(speed / 3);
-      
-      // Incremental difficulty
+
       if (score < 500) speed = 4;
       else if (score < 1000) speed = 5;
       else if (score < 2000) speed = 6;
@@ -304,8 +343,7 @@
       else if (score < 5000) speed = 8;
       else if (score < 7000) speed = 9;
       else speed = 10;
-      
-      // Jump
+
       if (isJumping) {
         robot.y += jumpForce;
         jumpForce += gravity;
@@ -315,17 +353,15 @@
           jumpForce = 0;
         }
       }
-      
-      // Move obstacles
+
       buildings.forEach(b => b.x -= speed);
       viruses.forEach(v => { v.x -= speed; v.y += Math.sin(frame * 0.1) * 0.5; });
-      
-      // Remove off-screen
+
       buildings = buildings.filter(b => b.x + b.w > -50);
       viruses = viruses.filter(v => v.x > -30);
-      
+
       spawnObstacle();
-      
+
       if (checkCollision()) {
         gameOver = true;
         if (score > highScore) {
@@ -335,14 +371,13 @@
         finalScoreEl.textContent = `Score: ${score}`;
         gameOverEl.style.display = 'block';
       }
-      
+
       scoreEl.textContent = `SCORE ${String(score).padStart(5, '0')}`;
       highEl.textContent = `HI ${String(highScore).padStart(5, '0')}`;
     }
 
     function draw() {
-      ctx.clearRect(0, 0, 800, 300);
-      
+      ctx.clearRect(0, 0, W, H);
       drawStars();
       drawGround();
       drawRobot();
@@ -360,7 +395,6 @@
       if (!isJumping && !gameOver) {
         isJumping = true;
         isDucking = false;
-        // Jump force scales with speed (higher speed = higher jump)
         jumpForce = -12 + Math.min(score / 1500, 4);
       }
     }
@@ -382,7 +416,7 @@
       gameOverEl.style.display = 'none';
     }
 
-    // Controls
+    // Keyboard
     document.addEventListener('keydown', (e) => {
       if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); if (gameOver) restart(); else jump(); }
       if (e.code === 'ArrowDown') duck(true);
@@ -390,24 +424,28 @@
     document.addEventListener('keyup', (e) => {
       if (e.code === 'ArrowDown') duck(false);
     });
-    canvas.addEventListener('click', jump);
-        canvas.addEventListener('touchstart', (e) => { 
-      e.preventDefault(); 
+
+    // Mouse
+    canvas.addEventListener('click', () => { if (gameOver) restart(); else jump(); });
+
+    // Touch zones
+    const touchLeft = document.getElementById('touchLeft');
+    const touchRight = document.getElementById('touchRight');
+
+    touchLeft.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameOver) restart(); else jump(); });
+    touchRight.addEventListener('touchstart', (e) => { e.preventDefault(); duck(true); });
+    touchRight.addEventListener('touchend', (e) => { e.preventDefault(); duck(false); });
+
+    // Full canvas touch fallback
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
       const x = e.touches[0].clientX;
       const rect = canvas.getBoundingClientRect();
       const relX = x - rect.left;
-      if (relX > rect.width / 2) {
-        // Right side = duck
-        isDucking = true;
-      } else {
-        // Left side = jump
-        jump();
-      }
+      if (gameOver) { restart(); return; }
+      if (relX > rect.width / 2) { duck(true); } else { jump(); }
     });
-    canvas.addEventListener('touchend', (e) => { 
-      e.preventDefault(); 
-      isDucking = false;
-    });
+    canvas.addEventListener('touchend', (e) => { e.preventDefault(); duck(false); });
 
     highEl.textContent = `HI ${String(highScore).padStart(5, '0')}`;
     gameLoop();
