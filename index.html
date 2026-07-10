@@ -359,6 +359,7 @@
     function jump() {
       if (!isJumping && !gameOver) {
         isJumping = true;
+        isDucking = false;
         // Jump force scales with speed (higher speed = higher jump)
         jumpForce = -12 + Math.min(score / 1500, 4);
       }
