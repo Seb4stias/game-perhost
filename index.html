@@ -391,7 +391,23 @@
       if (e.code === 'ArrowDown') duck(false);
     });
     canvas.addEventListener('click', jump);
-    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
+        canvas.addEventListener('touchstart', (e) => { 
+      e.preventDefault(); 
+      const x = e.touches[0].clientX;
+      const rect = canvas.getBoundingClientRect();
+      const relX = x - rect.left;
+      if (relX > rect.width / 2) {
+        // Right side = duck
+        isDucking = true;
+      } else {
+        // Left side = jump
+        jump();
+      }
+    });
+    canvas.addEventListener('touchend', (e) => { 
+      e.preventDefault(); 
+      isDucking = false;
+    });
 
     highEl.textContent = `HI ${String(highScore).padStart(5, '0')}`;
     gameLoop();
