@@ -218,6 +218,11 @@
     }
 
     function spawnObstacle() {
+      // Check minimum distance from last obstacle
+      const lastObs = buildings.length > 0 ? buildings[buildings.length - 1] : null;
+      const minGap = 150 + (10 - speed) * 10; // Gap gets tighter as speed increases
+      if (lastObs && (820 - lastObs.x) < minGap) return;
+      
       if (Math.random() < (0.015 + speed * 0.001)) {
         const type = Math.random();
         if (type < 0.4) {
