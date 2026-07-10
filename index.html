@@ -360,7 +360,7 @@
       if (!isJumping && !gameOver) {
         isJumping = true;
         // Jump force scales with speed (higher speed = higher jump)
-        jumpForce = -11 - (speed - 4) * 0.3;
+        jumpForce = -12 + Math.min(score / 1500, 4);
       }
     }
 
