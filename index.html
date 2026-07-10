@@ -99,7 +99,8 @@
 
     let score = 0;
     let highScore = parseInt(localStorage.getItem('perrobot_hi') || '0');
-    let speed = 6;
+    let speed = 4;
+    let baseSpeed = 4;
     let frame = 0;
     let gameOver = false;
     let ground = 260;
@@ -219,16 +220,19 @@
     function spawnObstacle() {
       if (Math.random() < 0.02) {
         const type = Math.random();
-        if (type < 0.5) {
+        if (type < 0.4) {
           // Building
           const h = 30 + Math.random() * 40;
           buildings.push({ x: 820, h, w: 25 + Math.random() * 20, lit: Math.random() > 0.3 });
-        } else if (type < 0.8) {
+        } else if (type < 0.75) {
           // Small building (jump over)
           buildings.push({ x: 820, h: 20 + Math.random() * 15, w: 20 + Math.random() * 15, lit: Math.random() > 0.3 });
         } else if (score > 600) {
-          // Virus (fly)
-          viruses.push({ x: 820, y: ground - 20 - Math.random() * 40, w: 24, h: 20 });
+          // Virus (fly) - more frequent at higher scores
+          const virusChance = score > 3000 ? 0.15 : score > 1500 ? 0.1 : 0.08;
+          if (Math.random() < virusChance) {
+            viruses.push({ x: 820, y: ground - 15 - Math.random() * 35, w: 24, h: 20 });
+          }
         }
       }
     }
@@ -250,7 +254,7 @@
       for (const v of viruses) {
         const dx = (r.x + r.w/2) - (v.x + 12);
         const dy = (y + h/2) - v.y;
-        if (Math.sqrt(dx*dx + dy*dy) < 20) return true;
+        if (Math.sqrt(dx*dx + dy*dy) < 18) return true;
       }
       
       return false;
@@ -285,9 +289,16 @@
       if (gameOver) return;
       
       frame++;
-      score += Math.floor(speed / 2);
+      score += Math.floor(speed / 3);
       
-      if (score % 100 === 0 && speed < 15) speed += 0.5;
+      // Incremental difficulty
+      if (score < 500) speed = 4;
+      else if (score < 1000) speed = 5;
+      else if (score < 2000) speed = 6;
+      else if (score < 3500) speed = 7;
+      else if (score < 5000) speed = 8;
+      else if (score < 7000) speed = 9;
+      else speed = 10;
       
       // Jump
       if (isJumping) {
@@ -343,7 +354,8 @@
     function jump() {
       if (!isJumping && !gameOver) {
         isJumping = true;
-        jumpForce = -13;
+        // Jump force scales with speed (higher speed = higher jump)
+        jumpForce = -11 - (speed - 4) * 0.3;
       }
     }
 
@@ -353,7 +365,7 @@
 
     function restart() {
       score = 0;
-      speed = 6;
+      speed = 4;
       frame = 0;
       gameOver = false;
       robot.y = ground;
