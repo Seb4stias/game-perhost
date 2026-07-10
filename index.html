@@ -287,13 +287,13 @@
         const type = Math.random();
         if (type < 0.4) {
           const h = 30 + Math.random() * 40;
-          buildings.push({ x: 820, h, w: 25 + Math.random() * 20, lit: Math.random() > 0.3 });
+          buildings.push({ x: W / scaleX + 50, h, w: 25 + Math.random() * 20, lit: Math.random() > 0.3 });
         } else if (type < 0.75) {
-          buildings.push({ x: 820, h: 20 + Math.random() * 15, w: 20 + Math.random() * 15, lit: Math.random() > 0.3 });
+          buildings.push({ x: W / scaleX + 50, h: 20 + Math.random() * 15, w: 20 + Math.random() * 15, lit: Math.random() > 0.3 });
         } else if (score > 600) {
           const virusChance = score > 3000 ? 0.15 : score > 1500 ? 0.1 : 0.08;
           if (Math.random() < virusChance) {
-            viruses.push({ x: 820, y: ground - 15 - Math.random() * 35, w: 24, h: 20 });
+            viruses.push({ x: W / scaleX + 50, y: ground - 15 - Math.random() * 35, w: 24, h: 20 });
           }
         }
       }
@@ -371,8 +371,8 @@
       buildings.forEach(b => b.x -= speed);
       viruses.forEach(v => { v.x -= speed; v.y += Math.sin(frame * 0.1) * 0.5; });
 
-      buildings = buildings.filter(b => b.x + b.w > -50);
-      viruses = viruses.filter(v => v.x > -30);
+      buildings = buildings.filter(b => b.x + b.w > -100);
+      viruses = viruses.filter(v => v.x > -100);
 
       spawnObstacle();
 
