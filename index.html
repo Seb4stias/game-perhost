@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PerRobot — El juego de PerHost</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+    }
+    canvas { border: 2px solid #333; border-radius: 4px; }
+    #ui {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 30px;
+      align-items: center;
+      z-index: 10;
+    }
+    #score, #highscore {
+      color: #e53935;
+      font-size: 24px;
+      font-weight: bold;
+      text-shadow: 0 0 10px rgba(229,57,53,0.5);
+      letter-spacing: 2px;
+    }
+    #gameOver {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 20;
+    }
+    #gameOver h1 {
+      color: #e53935;
+      font-size: 48px;
+      margin-bottom: 10px;
+      text-shadow: 0 0 20px rgba(229,57,53,0.8);
+    }
+    #gameOver p {
+      color: #888;
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+    #gameOver button {
+      background: #e53935;
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      font-size: 18px;
+      font-family: 'Courier New', monospace;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    #gameOver button:hover { background: #c62828; }
+    #instructions {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #555;
+      font-size: 14px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <span id="score">SCORE 00000</span>
+    <span id="highscore">HI 00000</span>
+  </div>
+  <canvas id="game" width="800" height="300"></canvas>
+  <div id="gameOver">
+    <h1>GAME OVER</h1>
+    <p id="finalScore">Score: 0</p>
+    <button onclick="restart()">REINICIAR</button>
+  </div>
+  <div id="instructions">ESPACIO o CLICK para saltar | ↓ para agacharse</div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const highEl = document.getElementById('highscore');
+    const gameOverEl = document.getElementById('gameOver');
+    const finalScoreEl = document.getElementById('finalScore');
+
+    let score = 0;
+    let highScore = parseInt(localStorage.getItem('perrobot_hi') || '0');
+    let speed = 6;
+    let frame = 0;
+    let gameOver = false;
+    let ground = 260;
+    let jumpForce = 0;
+    let gravity = 0.6;
+    let isJumping = false;
+    let isDucking = false;
+
+    // Robot
+    let robot = { x: 80, y: ground, w: 30, h: 50, duckH: 30 };
+    let legFrame = 0;
+
+    // Obstacles
+    let obstacles = [];
+    let buildings = [];
+    let viruses = [];
+
+    function drawRobot() {
+      const r = robot;
+      const h = isDucking ? r.duckH : r.h;
+      const y = isDucking ? ground + (r.h - r.duckH) : r.y;
+      
+      // Body (black)
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(r.x, y, r.w, h);
+      
+      // Red chest plate
+      ctx.fillStyle = '#e53935';
+      ctx.fillRect(r.x + 5, y + 8, r.w - 10, h - 16);
+      
+      // Letter P
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('P', r.x + r.w/2, y + h/2 + 5);
+      
+      // Head (antenna)
+      ctx.fillStyle = '#e53935';
+      ctx.fillRect(r.x + 12, y - 8, 6, 8);
+      ctx.fillRect(r.x + 10, y - 12, 10, 4);
+      
+      // Eyes
+      ctx.fillStyle = '#0f0';
+      ctx.fillRect(r.x + 6, y + 3, 5, 4);
+      ctx.fillRect(r.x + r.w - 11, y + 3, 5, 4);
+      
+      // Legs (animated)
+      if (!isDucking) {
+        ctx.fillStyle = '#333';
+        legFrame = (legFrame + 0.15) % 4;
+        const legOff = Math.sin(legFrame * Math.PI) * 4;
+        ctx.fillRect(r.x + 5, y + h, 6, 8 + legOff);
+        ctx.fillRect(r.x + r.w - 11, y + h, 6, 8 - legOff);
+      }
+    }
+
+    function drawBuilding(b) {
+      // Building body
+      ctx.fillStyle = '#2a2a2a';
+      ctx.fillRect(b.x, ground + 50 - b.h, b.w, b.h);
+      
+      // Windows
+      ctx.fillStyle = b.lit ? '#ffd54f' : '#333';
+      for (let wy = ground + 50 - b.h + 5; wy < ground + 45; wy += 12) {
+        for (let wx = b.x + 4; wx < b.x + b.w - 4; wx += 10) {
+          ctx.fillRect(wx, wy, 5, 7);
+        }
+      }
+      
+      // Roof antenna
+      ctx.fillStyle = '#555';
+      ctx.fillRect(b.x + b.w/2 - 1, ground + 50 - b.h - 10, 2, 10);
+      ctx.fillStyle = '#e53935';
+      ctx.fillRect(b.x + b.w/2 - 2, ground + 50 - b.h - 12, 4, 3);
+    }
+
+    function drawVirus(v) {
+      const cx = v.x + 12;
+      const cy = v.y;
+      
+      // Body
+      ctx.fillStyle = '#7b1fa2';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Spikes
+      ctx.strokeStyle = '#7b1fa2';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2 + frame * 0.05;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * 10, cy + Math.sin(angle) * 10);
+        ctx.lineTo(cx + Math.cos(angle) * 16, cy + Math.sin(angle) * 16);
+        ctx.stroke();
+      }
+      
+      // Eyes
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(cx - 4, cy - 3, 3, 3);
+      ctx.fillRect(cx + 2, cy - 3, 3, 3);
+      
+      // Evil smile
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy + 2, 4, 0, Math.PI);
+      ctx.stroke();
+      
+      // Wings (flapping)
+      const wingY = Math.sin(frame * 0.2) * 4;
+      ctx.fillStyle = '#9c27b0';
+      ctx.fillRect(cx - 18, cy - 4 + wingY, 8, 3);
+      ctx.fillRect(cx + 10, cy - 4 - wingY, 8, 3);
+    }
+
+    function spawnObstacle() {
+      if (Math.random() < 0.02) {
+        const type = Math.random();
+        if (type < 0.5) {
+          // Building
+          const h = 30 + Math.random() * 40;
+          buildings.push({ x: 820, h, w: 25 + Math.random() * 20, lit: Math.random() > 0.3 });
+        } else if (type < 0.8) {
+          // Small building (jump over)
+          buildings.push({ x: 820, h: 20 + Math.random() * 15, w: 20 + Math.random() * 15, lit: Math.random() > 0.3 });
+        } else {
+          // Virus (fly)
+          viruses.push({ x: 820, y: ground - 40 - Math.random() * 60, w: 24, h: 20 });
+        }
+      }
+    }
+
+    function checkCollision() {
+      const r = robot;
+      const h = isDucking ? r.duckH : r.h;
+      const y = isDucking ? ground + (r.h - r.duckH) : r.y;
+      
+      // Building collision
+      for (const b of buildings) {
+        if (r.x + r.w > b.x && r.x < b.x + b.w &&
+            y + h > ground + 50 - b.h && y < ground + 50) {
+          return true;
+        }
+      }
+      
+      // Virus collision
+      for (const v of viruses) {
+        const dx = (r.x + r.w/2) - (v.x + 12);
+        const dy = (y + h/2) - v.y;
+        if (Math.sqrt(dx*dx + dy*dy) < 20) return true;
+      }
+      
+      return false;
+    }
+
+    function drawGround() {
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, ground + 50);
+      ctx.lineTo(800, ground + 50);
+      ctx.stroke();
+      
+      // Ground details
+      ctx.fillStyle = '#222';
+      for (let i = 0; i < 800; i += 30) {
+        const offset = (frame * speed) % 30;
+        ctx.fillRect(i - offset, ground + 52, 20, 2);
+      }
+    }
+
+    function drawStars() {
+      ctx.fillStyle = '#333';
+      for (let i = 0; i < 50; i++) {
+        const x = (i * 137 + frame * 0.1) % 800;
+        const y = (i * 97) % 150;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+
+    function update() {
+      if (gameOver) return;
+      
+      frame++;
+      score += Math.floor(speed / 2);
+      
+      if (score % 100 === 0 && speed < 15) speed += 0.5;
+      
+      // Jump
+      if (isJumping) {
+        robot.y += jumpForce;
+        jumpForce += gravity;
+        if (robot.y >= ground) {
+          robot.y = ground;
+          isJumping = false;
+          jumpForce = 0;
+        }
+      }
+      
+      // Move obstacles
+      buildings.forEach(b => b.x -= speed);
+      viruses.forEach(v => { v.x -= speed; v.y += Math.sin(frame * 0.1) * 0.5; });
+      
+      // Remove off-screen
+      buildings = buildings.filter(b => b.x + b.w > -50);
+      viruses = viruses.filter(v => v.x > -30);
+      
+      spawnObstacle();
+      
+      if (checkCollision()) {
+        gameOver = true;
+        if (score > highScore) {
+          highScore = score;
+          localStorage.setItem('perrobot_hi', highScore);
+        }
+        finalScoreEl.textContent = `Score: ${score}`;
+        gameOverEl.style.display = 'block';
+      }
+      
+      scoreEl.textContent = `SCORE ${String(score).padStart(5, '0')}`;
+      highEl.textContent = `HI ${String(highScore).padStart(5, '0')}`;
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, 800, 300);
+      
+      drawStars();
+      drawGround();
+      drawRobot();
+      buildings.forEach(drawBuilding);
+      viruses.forEach(drawVirus);
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function jump() {
+      if (!isJumping && !gameOver) {
+        isJumping = true;
+        jumpForce = -13;
+      }
+    }
+
+    function duck(start) {
+      if (!isJumping && !gameOver) isDucking = start;
+    }
+
+    function restart() {
+      score = 0;
+      speed = 6;
+      frame = 0;
+      gameOver = false;
+      robot.y = ground;
+      isJumping = false;
+      isDucking = false;
+      buildings = [];
+      viruses = [];
+      gameOverEl.style.display = 'none';
+    }
+
+    // Controls
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); jump(); }
+      if (e.code === 'ArrowDown') duck(true);
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.code === 'ArrowDown') duck(false);
+    });
+    canvas.addEventListener('click', jump);
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
+
+    highEl.textContent = `HI ${String(highScore).padStart(5, '0')}`;
+    gameLoop();
+  </script>
+</body>
+</html>
