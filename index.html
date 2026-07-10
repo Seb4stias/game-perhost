@@ -378,7 +378,7 @@
 
     // Controls
     document.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); jump(); }
+      if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); if (gameOver) restart(); else jump(); }
       if (e.code === 'ArrowDown') duck(true);
     });
     document.addEventListener('keyup', (e) => {
